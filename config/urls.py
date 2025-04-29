@@ -7,6 +7,7 @@ urlpatterns = [
 
     # API endpoints
     path('api/accounts/', include('accounts.urls')),
+    path('api/', include('game.urls')),
 
     # API Schema & Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

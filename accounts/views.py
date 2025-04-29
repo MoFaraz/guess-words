@@ -2,7 +2,9 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
-from .serializers import RegisterSerializer, UserProfileSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+from .serializers import RegisterSerializer, UserProfileSerializer, CustomTokenObtainPairSerializer
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 User = get_user_model()
@@ -83,3 +85,7 @@ class AccountViewSet(viewsets.GenericViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer

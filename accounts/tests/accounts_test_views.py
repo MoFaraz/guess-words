@@ -10,11 +10,11 @@ class AccountsAPITests(APITestCase):
     """Test suite for the accounts API endpoints"""
 
     def setUp(self):
-        """Set up test data"""
-        # Create a test user for authentication tests
+        """Set up tests data"""
+        # Create a tests user for authentication tests
         self.test_user = User.objects.create_user(
             username='testuser',
-            email='test@example.com',
+            email='tests@example.com',
             password='TestPassword123'
         )
 
@@ -115,7 +115,7 @@ class AccountsAPITests(APITestCase):
 
         # Check returned data
         self.assertEqual(response.data['username'], 'testuser')
-        self.assertEqual(response.data['email'], 'test@example.com')
+        self.assertEqual(response.data['email'], 'tests@example.com')
 
     def test_get_profile_unauthenticated(self):
         """Test profile access without authentication"""
