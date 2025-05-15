@@ -312,7 +312,7 @@ class LeaderboardViewSet(viewsets.ViewSet):
         top_players = (
             User.objects
             .values('username')
-            .annotate(total_score=F('score'))  # Using the score field directly from User model
+            .annotate(total_score=F('xp'))  # Using the score field directly from User model
             .order_by('-total_score')[:10]
         )
         return Response(top_players)
