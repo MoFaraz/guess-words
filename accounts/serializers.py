@@ -44,7 +44,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'score')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name')
         read_only_fields = ('id', 'email')
 
 
@@ -54,7 +54,7 @@ class UserProgressSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'level', 'xp', 'xp_for_next_level', 'progress_percent', 'score']
+        fields = ['id', 'username', 'level', 'xp', 'xp_for_next_level', 'progress_percent']
 
     def get_xp_for_next_level(self, obj):
         return obj.get_xp_for_next_level()
