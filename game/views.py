@@ -93,7 +93,6 @@ class GameViewSet(viewsets.ModelViewSet):
             "game": GameDetailSerializer(game).data,
         }, status=status.HTTP_201_CREATED)
 
-
     @extend_schema(
         summary="Submit a guess",
         request=GuessSerializer,
@@ -104,8 +103,8 @@ class GameViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'])
     def guess(self, request):
-        game = self.get_current_user_game(user)
         user = request.user
+        game = self.get_current_user_game(user)
 
         serializer = GuessSerializer(data=request.data)
         if not serializer.is_valid():
@@ -126,6 +125,12 @@ class GameViewSet(viewsets.ModelViewSet):
             is_correct=result['points'] > 0,
             points=result['points']
         )
+
+        if game.status == 3:
+            return Response({
+                "message": "Correct! You win the game",
+                "game": GameDetailSerializer(game).data
+            })
 
         return Response({
             "result": result['message'],
@@ -154,8 +159,8 @@ class GameViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'])
     def guess_word(self, request):
-        game = self.get_current_user_game(user)
         user = request.user
+        game = self.get_current_user_game(user)
 
         serializer = WordGuessSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -214,8 +219,8 @@ class GameViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'])
     def reveal_letter(self, request):
-        game = self.get_current_user_game(user)
         user = request.user
+        game = self.get_current_user_game(user)
 
         if game.status != 2:
             return Response({"error": "Game not active"}, status=status.HTTP_400_BAD_REQUEST)
