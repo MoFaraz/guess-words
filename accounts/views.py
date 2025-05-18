@@ -1,9 +1,11 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from .permissions import IsGameAdmin
 from .serializers import RegisterSerializer, UserProfileSerializer, CustomTokenObtainPairSerializer
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
@@ -11,27 +13,22 @@ User = get_user_model()
 
 
 class AccountViewSet(viewsets.GenericViewSet):
-    """
-    ViewSet for user account operations including registration and profile management.
-    """
     queryset = User.objects.all()
 
     def get_permissions(self):
-        """
-        Set permissions based on the action being performed.
-        - Register: open to anyone
-        - Profile access: authenticated users only
-        """
         if self.action == 'register':
             permission_classes = [permissions.AllowAny]
+        elif self.action in ['kick_user', 'reset_coins']:
+            permission_classes = [IsGameAdmin]
         else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
 
     def get_serializer_class(self):
-        """Return appropriate serializer class based on the action"""
         if self.action == 'register':
             return RegisterSerializer
+        if self.action in ['kick_user', 'reset_coins']:
+            return None
         return UserProfileSerializer
 
     @extend_schema(
@@ -45,7 +42,6 @@ class AccountViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'])
     def register(self, request):
-        """Create a new user account"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -64,9 +60,21 @@ class AccountViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['get'])
     def profile(self, request):
-        """Get the current user's profile"""
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def kick_user(self, pk=None):
+        user = get_object_or_404(User, pk=pk)
+        user.delete()
+        return Response({'message': 'User kicked successfully'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def reset_coins(self, pk=None):
+        user = get_object_or_404(User, pk=pk)
+        user.coin = 0
+        user.save()
+        return Response({'message': 'User coins reset to 0'}, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Update user profile",
@@ -80,7 +88,6 @@ class AccountViewSet(viewsets.GenericViewSet):
     )
     @profile.mapping.patch
     def update_profile(self, request):
-        """Update the current user's profile"""
         serializer = self.get_serializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()

@@ -3,9 +3,14 @@ from django.db import models
 
 
 class User(AbstractUser):
+    ROLE_CHOICES = [
+        ('player', 'Player'),
+        ('admin', 'Admin'),
+    ]
     level = models.IntegerField(default=1)
     xp = models.IntegerField(default=0)
     coin = models.IntegerField(default=0)
+    role = models.CharField(choices=ROLE_CHOICES, default='player')
 
     class Meta:
         verbose_name = 'User'
@@ -90,3 +95,5 @@ class User(AbstractUser):
             self.save()
             return True
         return False
+
+
