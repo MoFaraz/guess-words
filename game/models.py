@@ -8,7 +8,6 @@ from django.db import models
 from accounts.models import User
 
 
-
 class WordBank(models.Model):
     DIFFICULTY_CHOICES = [
         (1, 'Easy'),
@@ -245,10 +244,11 @@ class Player(models.Model):
 
     class Meta:
         unique_together = ('user', 'game')
+        verbose_name = 'Player'
+        verbose_name_plural = 'Players'
 
     def __str__(self):
         return f"{self.user.username}"
-
 
 
 class GuessHistory(models.Model):

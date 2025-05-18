@@ -3,7 +3,6 @@ from . import views
 
 router = DefaultRouter()
 router.register(r'games', views.GameViewSet, basename='game')
-router.register(r'players', views.PlayerViewSet, basename='player')
 router.register(r'wordbanks', views.WordBankViewSet, basename='word')
 router.register('history', views.GameHistoryViewSet, basename='history')
 router.register('leaderboard', views.LeaderboardViewSet, basename='leaderboard')

@@ -1,13 +1,11 @@
-import random
-
-from django.core.exceptions import ValidationError
-from django.db.models import Sum, F
-from rest_framework import viewsets, status, permissions
+from django.db.models import F
+from rest_framework import viewsets, status, permissions, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.models import User
-from .models import Game, Player, GuessHistory, WordBank, GameHistory
+from accounts.permissions import IsGameAdmin
+from .models import Game, Player, WordBank, GameHistory
 from .serializers import (
     GameListSerializer, GameDetailSerializer, GameCreateSerializer,
     PlayerSerializer, GuessHistorySerializer, WordBankSerializer,
@@ -15,6 +13,13 @@ from .serializers import (
 )
 from drf_spectacular.utils import (
     extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
+)
+
+from .services import GameService
+from .mixins import GameMixin, ThrottleMixin
+from .throttles import (
+    GameActionThrottle, GameCreateThrottle,
+    ApiDefaultThrottle, ApiAnonThrottle
 )
 
 
@@ -28,23 +33,26 @@ from drf_spectacular.utils import (
     update=extend_schema(summary="Update a game"),
     partial_update=extend_schema(summary="Partially update a game"),
 )
-class GameViewSet(viewsets.ModelViewSet):
+class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ApiDefaultThrottle]
 
-    def get_current_user_game(self, user):
-        return Game.objects.filter(players__user=user, status=2).first()
+    def get_throttles(self):
+        """Apply different throttles based on action"""
+        if self.action == 'create':
+            self.throttle_classes = [GameCreateThrottle]
+        elif self.action in ['guess', 'guess_word', 'reveal_letter', 'join']:
+            self.throttle_classes = [GameActionThrottle]
+        return super().get_throttles()
 
     def get_queryset(self):
         status_filter = self.request.query_params.get('status', None)
         queryset = Game.objects.all()
+
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        active_games = queryset.filter(status=2)
-        for game in active_games:
-            if game.is_expired():
-                game.end_game()
-
+        self.check_active_games()
         return queryset.order_by('-created_at')
 
     def get_serializer_class(self):
@@ -57,12 +65,13 @@ class GameViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
 
-        active_or_waiting_games = Game.objects.filter(creator=user, status__in=[1, 2])
-        if active_or_waiting_games.exists():
-            return Response({"error": "You already have an active or waiting game"},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if GameService.check_active_games(user):
+            self.permission_denied(
+                self.request,
+                message="You already have an active or waiting game"
+            )
 
-        serializer.save(creator=self.request.user)
+        serializer.save(creator=user)
 
     @extend_schema(
         summary="Join a game",
@@ -78,12 +87,16 @@ class GameViewSet(viewsets.ModelViewSet):
         user = request.user
 
         if game.status != 1:
-            return Response({"error": "Cannot join game that is not in waiting status"},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Cannot join game that is not in waiting status"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if game.players.filter(user=user).exists():
-            return Response({"error": "You are already in this game"},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "You are already in this game"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         player = Player.objects.create(user=user, game=game)
         game.start_game()
@@ -103,29 +116,22 @@ class GameViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'])
     def guess(self, request):
-        user = request.user
-        game = self.get_current_user_game(user)
-
         serializer = GuessSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        letter = serializer.validated_data['letter']
-        result = game.guess_letter(user, letter)
-
-        if not result['success']:
-            return Response({"error": result['message']},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        player = game.players.get(user=user)
-        GuessHistory.objects.create(
-            player=player,
-            game=game,
-            letter=letter,
-            is_correct=result['points'] > 0,
-            points=result['points']
+        result = GameService.process_guess(
+            user=request.user,
+            letter=serializer.validated_data['letter']
         )
 
+        if not result['success']:
+            return Response(
+                {"error": result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        game = result['game']
         if game.status == 3:
             return Response({
                 "message": "Correct! You win the game",
@@ -159,118 +165,43 @@ class GameViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'])
     def guess_word(self, request):
-        user = request.user
-        game = self.get_current_user_game(user)
-
         serializer = WordGuessSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        guessed_word = serializer.validated_data['word'].lower()
+        result = GameService.process_word_guess(
+            user=request.user,
+            guessed_word=serializer.validated_data['word']
+        )
 
-        if game.status != 2:
-            return Response({"error": "Game is not active."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if guessed_word == game.word.lower():
-            game.winner = user
-            game.save()
-
-            player = game.players.get(user=user)
-            GameHistory.objects.create(
-                game=game,
-                player=player,
-                score=100,
-                result='win',
-                guessed_word=guessed_word
+        if not result['success'] and not result['game']:
+            return Response(
+                {"error": result['message']},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-            game.end_game()
-
-            return Response({
-                "message": "Correct! You win the game",
-                "game": GameDetailSerializer(game).data
-            })
-
-        else:
-            game.status = 3
-            game.winner = game.players.exclude(user=user).first().user
-            game.save()
-
-            GameHistory.objects.create(
-                game=game,
-                player=user,
-                score=-50,
-                result='lose',
-                guessed_word=guessed_word
-            )
-
-            game.end_game()
-
-            return Response({
-                "message": "Incorrect guess. You lost the game",
-                "game": GameDetailSerializer(game).data
-            })
+        return Response({
+            "message": result['message'],
+            "game": GameDetailSerializer(result['game']).data
+        })
 
     @extend_schema(
-        summary="reveal a letter",
+        summary="Reveal a letter",
         responses={
-            200: OpenApiResponse(description="Word guess processed"),
-            400: OpenApiResponse(description="Incorrect word guess or error")
+            200: OpenApiResponse(description="Letter revealed"),
+            400: OpenApiResponse(description="Error revealing letter")
         }
     )
     @action(detail=False, methods=['post'])
     def reveal_letter(self, request):
-        user = request.user
-        game = self.get_current_user_game(user)
+        result = GameService.reveal_letter(request.user)
 
-        if game.status != 2:
-            return Response({"error": "Game not active"}, status=status.HTTP_400_BAD_REQUEST)
+        if not result['success']:
+            return Response(
+                {"error": result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        try:
-            player = game.players.get(user=user)
-        except Player.DoesNotExist:
-            return Response({"error": "Not in game"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check if there are hidden letters
-        if '_' not in game.masked_word:
-            return Response({"error": "No hidden letters to reveal"}, status=status.HTTP_400_BAD_REQUEST)
-
-        reveal_cost = 30
-
-        if not user.deduct_coins(reveal_cost):
-            return Response({"error": "Not enough coins"}, status=status.HTTP_400_BAD_REQUEST)
-
-        hidden_positions = [i for i, char in enumerate(game.masked_word) if char == '_']
-
-        pos = random.choice(hidden_positions)
-
-        new_masked = list(game.masked_word)
-        new_masked[pos] = game.word[pos]
-        game.masked_word = ''.join(new_masked)
-        game.save()
-
-        return Response({
-            "message": f"Letter revealed at position {pos + 1}",
-            "masked_word": game.masked_word,
-            "coins_spent": reveal_cost,
-            "remaining_coins": user.coin
-        })
-
-
-@extend_schema_view(
-    list=extend_schema(summary="List all players", parameters=[
-        OpenApiParameter(name='game', type=int, description="Filter by game ID")
-    ]),
-    retrieve=extend_schema(summary="Retrieve player details")
-)
-class PlayerViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = PlayerSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        game_id = self.request.query_params.get('game', None)
-        if game_id:
-            return Player.objects.filter(game_id=game_id).order_by('-score')
-        return Player.objects.all().order_by('-score')
+        return Response(result)
 
 
 @extend_schema_view(
@@ -284,24 +215,22 @@ class PlayerViewSet(viewsets.ReadOnlyModelViewSet):
 class WordBankViewSet(viewsets.ModelViewSet):
     queryset = WordBank.objects.all()
     serializer_class = WordBankSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsGameAdmin]
+    throttle_classes = [ApiDefaultThrottle]
 
 
-@extend_schema_view(
-    list=extend_schema(summary="List user's game history"),
-    retrieve=extend_schema(summary="Get game history detail"),
-    create=extend_schema(summary="Create a new game history record"),
-    update=extend_schema(summary="Update a game history record"),
-    partial_update=extend_schema(summary="Partially update a game history record"),
-    destroy=extend_schema(summary="Delete a game history record")
-)
-class GameHistoryViewSet(viewsets.ModelViewSet):
-    queryset = GameHistory.objects.all()
+class GameHistoryViewSet(mixins.CreateModelMixin,
+                         mixins.RetrieveModelMixin,
+                         mixins.UpdateModelMixin,
+                         mixins.DestroyModelMixin,
+                         mixins.ListModelMixin,
+                         viewsets.GenericViewSet):
     serializer_class = GameHistorySerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ApiDefaultThrottle]
 
     def get_queryset(self):
-        return self.queryset.filter(player=self.request.user, game__status=1)
+        return GameHistory.objects.filter(player=self.request.user, game__status=1)
 
     def perform_create(self, serializer):
         serializer.save(player=self.request.user)
@@ -312,12 +241,13 @@ class GameHistoryViewSet(viewsets.ModelViewSet):
 )
 class LeaderboardViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ApiAnonThrottle]
 
     def list(self, request):
         top_players = (
             User.objects
             .values('username')
-            .annotate(total_score=F('xp'))  # Using the score field directly from User model
+            .annotate(total_score=F('xp'))
             .order_by('-total_score')[:10]
         )
         return Response(top_players)
