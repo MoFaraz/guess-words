@@ -41,8 +41,7 @@ ENV/
 *.swo
 
 # Migrations
-game/migrations
-accounts/migrations
+**/__pycache__/
 
 # OS
 .DS_Store
