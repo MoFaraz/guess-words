@@ -39,11 +39,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    """Serializer for user profile endpoint"""
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'role')
         read_only_fields = ('id', 'email')
 
 
