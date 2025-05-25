@@ -52,6 +52,8 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
+        queryset = queryset.filter(status=1)
+
         self.check_active_games()
         return queryset.order_by('-created_at')
 

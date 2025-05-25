@@ -47,7 +47,7 @@ class GameHistorySerializer(serializers.ModelSerializer):
 
 
 class WordGuessSerializer(serializers.Serializer):
-    word = serializers.CharField(max_length=100, min_length=4)
+    word = serializers.CharField(max_length=100, min_length=3)
 
 
 class GameDetailSerializer(serializers.ModelSerializer):

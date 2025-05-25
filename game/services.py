@@ -36,7 +36,6 @@ class GameService:
 
     @staticmethod
     def process_word_guess(user, guessed_word):
-        """Process a full word guess"""
         game = GameService.get_current_user_game(user)
 
         if not game or game.status != 2:
@@ -45,8 +44,8 @@ class GameService:
         player = game.players.get(user=user)
 
         if guessed_word.lower() == game.word.lower():
-            # Correct guess
             game.winner = user
+            game.masked_word = game.word.lower()
             game.save()
 
             GameHistory.objects.create(
@@ -69,6 +68,7 @@ class GameService:
             opponent = game.players.exclude(user=user).first()
             if opponent:
                 game.winner = opponent.user
+            game.masked_word = game.word.lower()
             game.save()
 
             GameHistory.objects.create(
@@ -99,7 +99,6 @@ class GameService:
         except Player.DoesNotExist:
             return {'success': False, 'message': 'Not in game'}
 
-        # Check if there are hidden letters
         if '_' not in game.masked_word:
             return {'success': False, 'message': 'No hidden letters to reveal'}
 

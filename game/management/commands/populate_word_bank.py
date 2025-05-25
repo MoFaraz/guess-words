@@ -6,31 +6,25 @@ class Command(BaseCommand):
     help = 'Populates the word pool with words for different difficulty levels'
 
     def handle(self, *args, **options):
-        # Clear existing words
         WordBank.objects.all().delete()
 
-        # Easy words (4-5 letters)
         easy_words = [
-            'game', 'play', 'word', 'time', 'code', 'work', 'turn',
-            'card', 'home', 'book', 'door', 'wind', 'cold', 'warm',
-            'rain', 'snow', 'tree', 'sing', 'fish', 'bird', 'cake',
-            'lake', 'city', 'moon', 'star', 'ship', 'road', 'path'
+            'باران', 'دریا', 'خورشید', 'کتاب', 'درخت', 'ماهی', 'خانه',
+            'مدرسه', 'دوست', 'ماشین', 'گربه', 'پرنده', 'قلم', 'دست',
+            'گل', 'کوه', 'باد', 'آب', 'آتش', 'چشم'
         ]
 
-        # Medium words (6-7 letters)
         medium_words = [
-            'python', 'coding', 'player', 'system', 'dinner', 'coffee',
-            'rainbow', 'summer', 'winter', 'garden', 'window', 'castle',
-            'melody', 'rhythm', 'autumn', 'basket', 'camera', 'pencil',
-            'kitchen', 'laptop', 'concert', 'journey', 'picture', 'theater'
+            'دانشجو', 'پاییز', 'سیب‌زمینی', 'فرودگاه', 'پروانه',
+            'نویسنده', 'دستگاه', 'کلاسیک', 'فرهنگ', 'بازیگر',
+            'ترانه', 'کامپیوتر', 'کتابخانه', 'میدان', 'تاریخچه'
         ]
 
-        # Hard words (8+ letters)
         hard_words = [
-            'developer', 'algorithm', 'interface', 'challenge', 'different',
-            'experience', 'community', 'beautiful', 'adventure', 'knowledge',
-            'discovery', 'chocolate', 'friendship', 'playground', 'education',
-            'technology', 'collection', 'revolution', 'generation', 'innovation'
+            'دانشگاه', 'برنامه‌نویس', 'کارآفرینی', 'الگوریتم',
+            'کاربرپسند', 'مسئولیت', 'روان‌شناسی', 'پیشرفت',
+            'آموزشگاه', 'هوشمندسازی', 'دستاورد', 'همکاری',
+            'توسعه‌دهنده', 'سیستم‌عامل', 'زیبایی‌شناسی'
         ]
 
         # Add words to the database
