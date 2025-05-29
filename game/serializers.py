@@ -17,7 +17,7 @@ class PlayerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Player
-        fields = ['id', 'user', 'score', 'joined_at']
+        fields = ['id', 'user', 'score']
 
 
 class GuessHistorySerializer(serializers.ModelSerializer):
