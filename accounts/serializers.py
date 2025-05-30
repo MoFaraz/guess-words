@@ -1,10 +1,9 @@
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-User = get_user_model()
+from accounts.models import User
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -38,24 +37,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['username'] = self.user.username
         return data
 
-class UserProfileSerializer(serializers.ModelSerializer):
 
+class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'role')
-        read_only_fields = ('id', 'email')
-
-
-class UserProgressSerializer(serializers.ModelSerializer):
-    xp_for_next_level = serializers.SerializerMethodField()
-    progress_percent = serializers.SerializerMethodField()
-
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'level', 'xp', 'xp_for_next_level', 'progress_percent']
-
-    def get_xp_for_next_level(self, obj):
-        return obj.get_xp_for_next_level()
-
-    def get_progress_percent(self, obj):
-        return obj.get_xp_progress()
+        read_only_fields = ('id', 'email', 'role')
