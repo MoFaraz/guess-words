@@ -90,10 +90,8 @@ class GameCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user = self.context['request'].user
-        # game = Game.objects.create(creator=user, **validated_data)
         game = Game.objects.create(**validated_data)
 
-        # Creator automatically joins the game
         Player.objects.create(user=user, game=game)
 
         return game
