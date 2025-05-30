@@ -1,44 +1,22 @@
-from django.db.models import F
 from rest_framework import viewsets, status, permissions, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.models import User
 from accounts.permissions import IsGameAdmin
-from .models import Game, Player, WordBank, GameHistory
-from .serializers import (
-    GameListSerializer, GameDetailSerializer, GameCreateSerializer,
-    PlayerSerializer, GuessHistorySerializer, WordBankSerializer,
-    GuessSerializer, GameHistorySerializer, WordGuessSerializer
-)
-from drf_spectacular.utils import (
-    extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
-)
+from .game_swagger import *
+from .serializers import *
 
 from .services import GameService
 from .mixins import GameMixin, ThrottleMixin
-from .throttles import (
-    GameActionThrottle, GameCreateThrottle,
-    ApiDefaultThrottle, ApiAnonThrottle
-)
+from .throttles import *
 
 
-@extend_schema_view(
-    list=extend_schema(summary="List all games", parameters=[
-        OpenApiParameter(name='status', type=str, description="Filter games by status")
-    ]),
-    retrieve=extend_schema(summary="Retrieve game details"),
-    create=extend_schema(summary="Create a new game"),
-    destroy=extend_schema(summary="Delete a game"),
-    update=extend_schema(summary="Update a game"),
-    partial_update=extend_schema(summary="Partially update a game"),
-)
+@GAME_VIEWSET_SCHEMA
 class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ApiDefaultThrottle]
 
     def get_throttles(self):
-        """Apply different throttles based on action"""
         if self.action == 'create':
             self.throttle_classes = [GameCreateThrottle]
         elif self.action in ['guess', 'guess_word', 'reveal_letter', 'join']:
@@ -73,18 +51,14 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
                 message="You already have an active or waiting game"
             )
 
-        serializer.save(creator=user)
+        game = serializer.save(creator=user)
+        GameService.invalidate_user_game_caches(user.id)
 
-    @extend_schema(
-        summary="Join a game",
-        request=None,
-        responses={
-            201: PlayerSerializer,
-            400: OpenApiResponse(description="Game not joinable or user already joined")
-        }
-    )
+        GameService.cache_active_game(game)
+
+    @JOIN_GAME_SCHEMA
     @action(detail=True, methods=['post'])
-    def join(self, request, pk=None):
+    def join(self, request):
         game = self.get_object()
         user = request.user
 
@@ -102,20 +76,14 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
 
         player = Player.objects.create(user=user, game=game)
         game.start_game()
+        GameService.cache_active_game(game)
 
         return Response({
             "player": PlayerSerializer(player).data,
             "game": GameDetailSerializer(game).data,
         }, status=status.HTTP_201_CREATED)
 
-    @extend_schema(
-        summary="Submit a guess",
-        request=GuessSerializer,
-        responses={
-            200: OpenApiResponse(description="Guess processed successfully"),
-            400: OpenApiResponse(description="Invalid guess or error processing")
-        }
-    )
+    @GUESS_LETTER_SCHEMA
     @action(detail=False, methods=['post'])
     def guess(self, request):
         serializer = GuessSerializer(data=request.data)
@@ -135,6 +103,7 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
 
         game = result['game']
         if game.status == 3:
+            game.end_game()
             return Response({
                 "message": "Correct! You win the game",
                 "game": GameDetailSerializer(game).data
@@ -146,10 +115,8 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
             "game": GameDetailSerializer(game).data
         })
 
-    @extend_schema(
-        summary="Get guess history for a game",
-        responses={200: GuessHistorySerializer(many=True)}
-    )
+
+    @GAME_HISTORY_SCHEMA
     @action(detail=True, methods=['get'])
     def history(self, request, pk=None):
         game = self.get_object()
@@ -157,14 +124,7 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
         serializer = GuessHistorySerializer(guesses, many=True)
         return Response(serializer.data)
 
-    @extend_schema(
-        summary="Submit a full word guess",
-        request=WordGuessSerializer,
-        responses={
-            200: OpenApiResponse(description="Word guess processed"),
-            400: OpenApiResponse(description="Incorrect word guess or error")
-        }
-    )
+    @GUESS_WORD_SCHEMA
     @action(detail=False, methods=['post'])
     def guess_word(self, request):
         serializer = WordGuessSerializer(data=request.data)
@@ -186,13 +146,7 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
             "game": GameDetailSerializer(result['game']).data
         })
 
-    @extend_schema(
-        summary="Reveal a letter",
-        responses={
-            200: OpenApiResponse(description="Letter revealed"),
-            400: OpenApiResponse(description="Error revealing letter")
-        }
-    )
+    @REVEAL_LETTER_SCHEMA
     @action(detail=False, methods=['post'])
     def reveal_letter(self, request):
         result = GameService.reveal_letter(request.user)
@@ -206,14 +160,7 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
         return Response(result)
 
 
-@extend_schema_view(
-    list=extend_schema(summary="List all words in word bank"),
-    retrieve=extend_schema(summary="Get word details"),
-    create=extend_schema(summary="Add a new word"),
-    update=extend_schema(summary="Update a word"),
-    partial_update=extend_schema(summary="Partially update a word"),
-    destroy=extend_schema(summary="Delete a word")
-)
+@WORDBANK_VIEWSET_SCHEMA
 class WordBankViewSet(viewsets.ModelViewSet):
     queryset = WordBank.objects.all()
     serializer_class = WordBankSerializer
@@ -221,6 +168,7 @@ class WordBankViewSet(viewsets.ModelViewSet):
     throttle_classes = [ApiDefaultThrottle]
 
 
+@GAMEHISTORY_VIEWSET_SCHEMA
 class GameHistoryViewSet(mixins.CreateModelMixin,
                          mixins.RetrieveModelMixin,
                          mixins.UpdateModelMixin,
@@ -238,18 +186,11 @@ class GameHistoryViewSet(mixins.CreateModelMixin,
         serializer.save(player=self.request.user)
 
 
-@extend_schema_view(
-    list=extend_schema(summary="Top 10 players based on total score")
-)
+@LEADERBOARD_VIEWSET_SCHEMA
 class LeaderboardViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ApiAnonThrottle]
 
-    def list(self, request):
-        top_players = (
-            User.objects
-            .values('username')
-            .annotate(total_score=F('xp'))
-            .order_by('-total_score')[:10]
-        )
+    def list(self):
+        top_players = GameService.leaderboard(10)
         return Response(top_players)

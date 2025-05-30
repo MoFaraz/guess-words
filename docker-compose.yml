@@ -3,7 +3,9 @@ services:
     build: .
     container_name: wordguess_web
     command: >
-      sh -c "python manage.py migrate &&
+      sh -c "python manage.py makemigrations &&
+             python manage.py makemigrations game &&
+             python manage.py migrate &&
              python manage.py collectstatic --noinput &&
              python manage.py runserver 0.0.0.0:8000"
     volumes:
@@ -13,6 +15,15 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: wordguess_redis
+    ports:
+      - "6379:6379"
     restart: unless-stopped
 
 volumes:

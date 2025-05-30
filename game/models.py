@@ -226,11 +226,12 @@ class Game(models.Model):
 
                 GameHistory.objects.create(
                     game=self,
-                    player=player,
+                    player=player.user,
                     score=player.score,
                     result='win' if i == 0 else 'lose',
                     guessed_word=self.word if '_' not in self.masked_word else self.masked_word
                 )
+                self.players.all().delete()
 
         self.save()
         return winner, level_up_results, coin_rewards
@@ -243,15 +244,10 @@ class Player(models.Model):
 
     class Meta:
         unique_together = ('user', 'game')
-        verbose_name = 'Player'
-        verbose_name_plural = 'Players'
-
-    def __str__(self):
-        return f"{self.user.username}"
 
 
 class GuessHistory(models.Model):
-    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='guesses')
+    player = models.ForeignKey(User, on_delete=models.CASCADE, related_name='guesses')
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='guesses')
     letter = models.CharField(max_length=1)
     is_correct = models.BooleanField()
@@ -260,12 +256,12 @@ class GuessHistory(models.Model):
 
     def __str__(self):
         result = "correct" if self.is_correct else "incorrect"
-        return f"{self.player.user.username} guessed '{self.letter}' ({result})"
+        return f"{self.player.username} guessed '{self.letter}' ({result})"
 
 
 class GameHistory(models.Model):
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='histories')
-    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='histories')
+    player = models.ForeignKey(User, on_delete=models.CASCADE, related_name='histories')
     score = models.IntegerField()
     result = models.CharField(max_length=10, choices=[('win', 'Win'), ('lose', 'Lose'), ('draw', 'Draw')])
     guessed_word = models.CharField(max_length=100)
