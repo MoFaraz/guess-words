@@ -1,9 +1,11 @@
 from rest_framework import viewsets, status, permissions, mixins
 from rest_framework.decorators import action
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
 from accounts.permissions import IsGameAdmin, IsAdminOrCreatorWhileWaiting
 from .game_swagger import *
+from .pagination import StandardResultsSetPagination
 from .serializers import *
 
 from .services import GameService
@@ -50,6 +52,8 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
             return GameDetailSerializer
         elif self.action in ['update', 'partial_update']:
             return GameCreateSerializer
+        elif self.action in ['reveal_letter']:
+            return None
         return GameListSerializer
 
     def perform_create(self, serializer):
@@ -178,28 +182,45 @@ class WordBankViewSet(viewsets.ModelViewSet):
 
 
 @GAMEHISTORY_VIEWSET_SCHEMA
-class GameHistoryViewSet(mixins.CreateModelMixin,
-                         mixins.RetrieveModelMixin,
-                         mixins.UpdateModelMixin,
-                         mixins.DestroyModelMixin,
-                         mixins.ListModelMixin,
-                         viewsets.GenericViewSet):
-    serializer_class = GameHistorySerializer
+class GameHistoryViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ApiDefaultThrottle]
+    pagination_class = StandardResultsSetPagination
 
-    def get_queryset(self):
-        return GameHistory.objects.filter(player=self.request.user)
+    def list(self, request):
+        queryset = GameHistory.objects.filter(player=request.user)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = GameHistorySerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
 
-    def perform_create(self, serializer):
-        serializer.save(player=self.request.user)
+        serializer = GameHistorySerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        history = get_object_or_404(GameHistory, pk=pk, player=request.user)
+        serializer = GameHistorySerializer(history)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        history = get_object_or_404(GameHistory, pk=pk, player=request.user)
+        history.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @LEADERBOARD_VIEWSET_SCHEMA
 class LeaderboardViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ApiAnonThrottle]
+    pagination_class = StandardResultsSetPagination
 
     def list(self, request):
         top_players = GameService.leaderboard()
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(top_players, request, view=self)
+        if page is not None:
+            return paginator.get_paginated_response(page)
+
         return Response(top_players)

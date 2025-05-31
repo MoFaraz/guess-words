@@ -450,22 +450,6 @@ GAMEHISTORY_VIEWSET_SCHEMA = extend_schema_view(
             404: OpenApiResponse(description="Game history not found")
         }
     ),
-    create=extend_schema(
-        summary="Create game history entry",
-        description="Create a new game history entry",
-        responses={
-            201: GameHistorySerializer,
-            400: VALIDATION_ERROR_RESPONSE
-        }
-    ),
-    update=extend_schema(
-        summary="Update game history",
-        description="Update a game history entry",
-        responses={
-            200: GameHistorySerializer,
-            404: OpenApiResponse(description="Game history not found")
-        }
-    ),
     destroy=extend_schema(
         summary="Delete game history",
         description="Delete a game history entry",

@@ -48,15 +48,19 @@ class AccountViewSet(viewsets.GenericViewSet):
 
     @AccountSwaggerDocs.kick_user
     @action(detail=True, methods=['post'])
-    def kick_user(self, pk=None):
+    def kick_user(self, request, pk=None):
         user = get_object_or_404(User, pk=pk)
+        if user.role == 'admin':
+            return Response({'message': 'Can not Kick Admin User'}, status=status.HTTP_403_FORBIDDEN)
         user.delete()
         return Response({'message': 'User kicked successfully'}, status=status.HTTP_200_OK)
 
     @AccountSwaggerDocs.reset_coins
     @action(detail=True, methods=['post'])
-    def reset_coins(self, pk=None):
+    def reset_coins(self, request, pk=None):
         user = get_object_or_404(User, pk=pk)
+        if user.role == 'admin':
+            return Response({'message': 'Can not Reset Coins Of Admin'}, status=status.HTTP_403_FORBIDDEN)
         user.coin = 0
         user.save()
         return Response({'message': 'User coins reset to 0'}, status=status.HTTP_200_OK)
