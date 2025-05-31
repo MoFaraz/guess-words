@@ -256,11 +256,11 @@ class GameService:
                     cache.set(user_cache_key, game.pk, GameService.ACTIVE_GAMES_CACHE_TIMEOUT)
 
     @staticmethod
-    def leaderboard(num):
+    def leaderboard():
         top_players = (
             User.objects
             .values('username')
             .annotate(total_score=F('xp'))
-            .order_by('-total_score')[:num]
+            .order_by('-total_score')[:10]
         )
         return top_players

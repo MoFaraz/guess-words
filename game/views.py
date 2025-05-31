@@ -2,7 +2,7 @@ from rest_framework import viewsets, status, permissions, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.permissions import IsGameAdmin
+from accounts.permissions import IsGameAdmin, IsAdminOrCreatorWhileWaiting
 from .game_swagger import *
 from .serializers import *
 
@@ -15,6 +15,12 @@ from .throttles import *
 class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ApiDefaultThrottle]
+
+    def get_permissions(self):
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [IsAdminOrCreatorWhileWaiting()]
+
+        return super().get_permissions()
 
     def get_throttles(self):
         if self.action == 'create':
@@ -38,8 +44,12 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return GameCreateSerializer
-        elif self.action in ['retrieve', 'update', 'partial_update']:
+        elif self.action in ['retrieve']:
+            if self.get_object().status == 1:
+                return GameCreateSerializer
             return GameDetailSerializer
+        elif self.action in ['update', 'partial_update']:
+            return GameCreateSerializer
         return GameListSerializer
 
     def perform_create(self, serializer):
@@ -58,7 +68,7 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
 
     @JOIN_GAME_SCHEMA
     @action(detail=True, methods=['post'])
-    def join(self, request):
+    def join(self, request, pk=None):
         game = self.get_object()
         user = request.user
 
@@ -114,7 +124,6 @@ class GameViewSet(GameMixin, ThrottleMixin, viewsets.ModelViewSet):
             "points": result['points'],
             "game": GameDetailSerializer(game).data
         })
-
 
     @GAME_HISTORY_SCHEMA
     @action(detail=True, methods=['get'])
@@ -180,7 +189,7 @@ class GameHistoryViewSet(mixins.CreateModelMixin,
     throttle_classes = [ApiDefaultThrottle]
 
     def get_queryset(self):
-        return GameHistory.objects.filter(player=self.request.user, game__status=1)
+        return GameHistory.objects.filter(player=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(player=self.request.user)
@@ -191,6 +200,6 @@ class LeaderboardViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ApiAnonThrottle]
 
-    def list(self):
-        top_players = GameService.leaderboard(10)
+    def list(self, request):
+        top_players = GameService.leaderboard()
         return Response(top_players)

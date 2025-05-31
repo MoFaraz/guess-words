@@ -16,10 +16,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . .
 
-# Create non-root user for security
-RUN adduser --disabled-password --gecos "" app_user && \
-    chown -R app_user:app_user /app
-USER app_user
-
-# Run gunicorn
-CMD ["gunicorn", "--bind", "127.0.0.1:8000", "config.wsgi:application"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

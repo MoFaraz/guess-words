@@ -1,5 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
+
 from .models import Game, Player, GuessHistory, WordBank, GameHistory
 from django.contrib.auth import get_user_model
 
@@ -107,6 +109,15 @@ class GuessSerializer(serializers.Serializer):
 
 
 class WordBankSerializer(serializers.ModelSerializer):
+    word = serializers.CharField(min_length=3, validators=[UniqueValidator(queryset=WordBank.objects.all())])
+
     class Meta:
         model = WordBank
         fields = ['id', 'word', 'difficulty']
+
+    def validate_word(self, value):
+        if len(value) < 3:
+            raise serializers.ValidationError("Must be at least 3 characters")
+        if not value.isalpha():
+            raise serializers.ValidationError("Must be alphabetical")
+        return value

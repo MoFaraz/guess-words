@@ -25,7 +25,7 @@ class AccountViewSet(viewsets.GenericViewSet):
     def get_serializer_class(self):
         if self.action == 'register':
             return RegisterSerializer
-        if self.action in ['kick_user', 'reset_coins']:
+        if self.action in ['kick_user', 'reset_coins', 'make_admin']:
             return None
         return UserProfileSerializer
 
@@ -72,7 +72,7 @@ class AccountViewSet(viewsets.GenericViewSet):
 
     @AccountSwaggerDocs.make_admin
     @action(detail=True, methods=['post'])
-    def make_admin(self, pk):
+    def make_admin(self, request, pk=None):
         user = get_object_or_404(User, pk=pk)
         if user.role == 'admin':
             return Response({'detail': 'User is already admin.'}, status=status.HTTP_400_BAD_REQUEST)

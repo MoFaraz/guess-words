@@ -84,16 +84,6 @@ class Game(models.Model):
             return False
         return timezone.now() > self.end_time
 
-    def get_winner(self):
-        player_scores = {}
-        for player in self.players.all():
-            player_scores[player.user.id] = player.score
-
-        if not player_scores:
-            return None
-
-        winner_id = max(player_scores, key=player_scores.get)
-        return self.players.get(user_id=winner_id)
 
     def guess_letter(self, user, letter):
         if self.status != 2:
@@ -155,21 +145,20 @@ class Game(models.Model):
         self.current_turn = players[0].user
 
     def end_game(self, timed_out=False):
-        """End the game and distribute XP and coins to players"""
         self.status = 3
 
-        # Get all players in descending order of score
         players = list(self.players.all().order_by('-score'))
         winner = players[0] if players else None
+
 
         level_up_results = []
         coin_rewards = {}
 
         if len(players) >= 2:
             difficulty_multiplier = {
-                1: 1.0,  # Easy
-                2: 1.5,  # Medium
-                3: 2.0  # Hard
+                1: 1.0,
+                2: 1.5,
+                3: 2.0
             }.get(self.difficulty, 1.0)
 
             word_length_modifier = len(self.word) / 5
@@ -177,9 +166,9 @@ class Game(models.Model):
             time_bonus = 0
             if not timed_out and self.start_time and self.end_time:
                 max_time = {
-                    1: 10 * 60,  # Easy: 10 minutes in seconds
-                    2: 7 * 60,  # Medium: 7 minutes in seconds
-                    3: 5 * 60  # Hard: 5 minutes in seconds
+                    1: 10 * 60,
+                    2: 7 * 60,
+                    3: 5 * 60
                 }.get(self.difficulty, 10 * 60)
 
                 actual_time = (self.end_time - self.start_time).total_seconds()

@@ -1,3 +1,4 @@
+from django.core.validators import RegexValidator
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
@@ -7,9 +8,24 @@ from accounts.models import User
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(
+        required=True,
+        min_length=4,
+        validators=[
+            UniqueValidator(queryset=User.objects.all(), message="This username is already taken.")
+        ]
+    )
     email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
+
+    name_validator = RegexValidator(
+        regex=r'^[a-zA-Z\u0600-\u06FF\s]+$',
+        message="Only letters are allowed."
+    )
+
+    first_name = serializers.CharField(required=False, min_length=3, validators=[name_validator])
+    last_name = serializers.CharField(required=False, min_length=3, validators=[name_validator])
 
     class Meta:
         model = User
